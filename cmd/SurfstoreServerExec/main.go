@@ -1,13 +1,17 @@
 package main
 
 import (
+	"cse224/proj4/pkg/surfstore"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"strconv"
 	"strings"
+
+	"google.golang.org/grpc"
 )
 
 // Usage String
@@ -51,7 +55,7 @@ func main() {
 	}
 
 	// Add localhost if necessary
-	addr := ""
+	addr := "" // TODO: How will this work in public IP case
 	if *localOnly {
 		addr += "localhost"
 	}
@@ -62,10 +66,54 @@ func main() {
 		log.SetFlags(0)
 		log.SetOutput(ioutil.Discard)
 	}
-
-	log.Fatal(startServer(addr, strings.ToLower(*service), blockStoreAddr))
+	// until here we just take details for port for server. then depending on the service type we need to 
+	// register the services and also initialize the blockstoreaddr. in case of "meta" and "both" service we will
+	// have blockstoreaddr
+	log.Fatal(startServer(addr, strings.ToLower(*service), blockStoreAddr)) // ?? why passed inside log.Fatal?
 }
 
 func startServer(hostAddr string, serviceType string, blockStoreAddr string) error {
-	panic("todo")
+	grpcServer := grpc.NewServer()
+
+	// Register RPC services
+	if serviceType == "both"{
+		metaStore := surfstore.NewMetaStore(blockStoreAddr)
+		surfstore.RegisterMetaStoreServer(grpcServer, metaStore)
+		blockStore := surfstore.NewBlockStore()
+		surfstore.RegisterBlockStoreServer(grpcServer, blockStore)
+		// Start listening and serving
+		lis, err := net.Listen("tcp", hostAddr)
+		if err != nil {
+			return fmt.Errorf("failed to listen: %v", err)
+		}
+		if err := grpcServer.Serve(lis); err != nil {
+			return fmt.Errorf("failed to serve: %v", err)
+		}
+		return nil	
+	} else if serviceType == "meta" {
+		metaStore := surfstore.NewMetaStore(blockStoreAddr)
+		surfstore.RegisterMetaStoreServer(grpcServer, metaStore)
+		// Start listening and serving
+		lis, err := net.Listen("tcp", hostAddr)
+		if err != nil {
+			return fmt.Errorf("failed to listen: %v", err)
+		}
+		if err := grpcServer.Serve(lis); err != nil {
+			return fmt.Errorf("failed to serve: %v", err)
+		}
+		return nil
+	} else if serviceType == "block"{
+		blockStore := surfstore.NewBlockStore()
+		surfstore.RegisterBlockStoreServer(grpcServer, blockStore)
+		// Start listening and serving
+		lis, err := net.Listen("tcp", hostAddr)
+		if err != nil {
+			return fmt.Errorf("failed to listen: %v", err)
+		}
+		if err := grpcServer.Serve(lis); err != nil {
+			return fmt.Errorf("failed to serve: %v", err)
+		}
+		return nil
+	}
+	return nil
 }
