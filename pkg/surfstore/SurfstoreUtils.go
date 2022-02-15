@@ -129,6 +129,7 @@ func ClientSync(client RPCClient) {
 			}
 			defer f.Close()
 			if len(remoteFileMetaData.BlockHashList) == 1 && remoteFileMetaData.BlockHashList[0] == "0"{ // downloading a delete update
+				log.Println("entered deletion")
 				_, err = os.Stat(filename)
 				if err != nil {
 					if !os.IsNotExist(err){ // not already deleted from local and still got erro
@@ -170,6 +171,7 @@ func ClientSync(client RPCClient) {
 			}
 			defer f.Close()
 			if len(remoteFileMetaData.BlockHashList) == 1 && remoteFileMetaData.BlockHashList[0] == "0"{ // downloading a delete update
+				log.Println("entered deletion")
 				_, err = os.Stat(filename)
 				if err != nil {
 					if !os.IsNotExist(err){ // not already deleted from local and still got erro
@@ -203,10 +205,9 @@ func ClientSync(client RPCClient) {
 	}
 	// write current state to local index (after download)
 	
-	// WriteMetaFile(localFileInfoMap, client.BaseDir)
-	scannedFileMetaDataAfterDownload := computeScannedFileMap(client.BaseDir, dirFiles, client.BlockSize)
-	_ = scannedFileMetaDataAfterDownload	
-	
+	dirFilesAfterDownload := scanFiles(client.BaseDir)
+	scannedFileMetaDataAfterDownload := computeScannedFileMap(client.BaseDir, dirFilesAfterDownload, client.BlockSize)
+		
 	// // once we are on same version with remote, add local changes to local index and then do the updates
 	// Upload new files and new updates
 	// at this step localFileInfoMap must be exactly same as remoteFileInfoMap
@@ -263,19 +264,37 @@ func ClientSync(client RPCClient) {
 				}
 				defer f.Close()
 				remoteFileMetaData := remoteFileInfoMap[file]
-				for _, hash := range remoteFileMetaData.BlockHashList{
-					block := Block{}
-					err := client.GetBlock(hash, blockStoreAddr, &block)
-					if err!= nil{
-						log.Fatal(err)
-					}
-					_, err = f.Write(block.BlockData[:block.BlockSize])
+				if len(remoteFileMetaData.BlockHashList) == 1 && remoteFileMetaData.BlockHashList[0] == "0"{ // downloading a delete update
+					log.Println("entered deletion")
+					_, err = os.Stat(filename)
 					if err != nil {
-						log.Fatal(err)
+						if !os.IsNotExist(err){ // not already deleted from local and still got erro
+							log.Fatal(err)
+						}
 					}
+					if !os.IsNotExist(err){ // not already deleted from local then delete it
+						err = os.Remove(filename)
+						if err != nil{
+							log.Fatal(err)
+						}	
+					}
+					fileMetaData := &FileMetaData{Filename: remoteFileMetaData.Filename, Version: remoteFileMetaData.Version, BlockHashList: remoteFileMetaData.BlockHashList}
+					localFileInfoMap[file] = fileMetaData // we would have got the same version, filename, and blockhashlist as server									
+				}else {
+					for _, hash := range remoteFileMetaData.BlockHashList{
+						block := Block{}
+						err := client.GetBlock(hash, blockStoreAddr, &block)
+						if err!= nil{
+							log.Fatal(err)
+						}
+						_, err = f.Write(block.BlockData[:block.BlockSize])
+						if err != nil {
+							log.Fatal(err)
+						}
+					}
+					fileMetaData := &FileMetaData{Filename: remoteFileMetaData.Filename, Version: remoteFileMetaData.Version, BlockHashList: remoteFileMetaData.BlockHashList}
+					localFileInfoMap[file] = fileMetaData // we would have got the same version, filename, and blockhashlist as server					
 				}
-				fileMetaData := &FileMetaData{Filename: remoteFileMetaData.Filename, Version: remoteFileMetaData.Version, BlockHashList: remoteFileMetaData.BlockHashList}
-				localFileInfoMap[file] = fileMetaData // we would have got the same version, filename, and blockhashlist as server
 					
 			}else { // do not allocated scannedFileMetaData directly because it does not have version number
 				localFileInfoMap[scannedFileMetaData.Filename] = &FileMetaData{Filename: scannedFileMetaData.Filename, BlockHashList: scannedFileMetaData.BlockHashList, Version: latestVersion}
@@ -323,29 +342,51 @@ func ClientSync(client RPCClient) {
 					}
 					defer f.Close()
 					remoteFileMetaData := remoteFileInfoMap[file]
-					for _, hash := range remoteFileMetaData.BlockHashList{
-						block := Block{}
-						err := client.GetBlock(hash, blockStoreAddr, &block)
-						if err!= nil{
-							log.Fatal(err)
-						}
-						_, err = f.Write(block.BlockData[:block.BlockSize])
+					if len(remoteFileMetaData.BlockHashList) == 1 && remoteFileMetaData.BlockHashList[0] == "0"{ // downloading a delete update
+						log.Println("entered deletion")
+						_, err = os.Stat(filename)
 						if err != nil {
-							log.Fatal(err)
+							if !os.IsNotExist(err){ // not already deleted from local and still got erro
+								log.Fatal(err)
+							}
 						}
+						if !os.IsNotExist(err){ // not already deleted from local then delete it
+							err = os.Remove(filename)
+							if err != nil{
+								log.Fatal(err)
+							}	
+						}
+						fileMetaData := &FileMetaData{Filename: remoteFileMetaData.Filename, Version: remoteFileMetaData.Version, BlockHashList: remoteFileMetaData.BlockHashList}
+						localFileInfoMap[file] = fileMetaData // we would have got the same version, filename, and blockhashlist as server									
+					}else {
+						for _, hash := range remoteFileMetaData.BlockHashList{
+							block := Block{}
+							err := client.GetBlock(hash, blockStoreAddr, &block)
+							if err!= nil{
+								log.Fatal(err)
+							}
+							_, err = f.Write(block.BlockData[:block.BlockSize])
+							if err != nil {
+								log.Fatal(err)
+							}
+						}
+						fileMetaData := &FileMetaData{Filename: remoteFileMetaData.Filename, Version: remoteFileMetaData.Version, BlockHashList: remoteFileMetaData.BlockHashList}
+						localFileInfoMap[file] = fileMetaData // we would have got the same version, filename, and blockhashlist as server					
 					}
-					fileMetaData := &FileMetaData{Filename: remoteFileMetaData.Filename, Version: remoteFileMetaData.Version, BlockHashList: remoteFileMetaData.BlockHashList}
-					localFileInfoMap[file] = fileMetaData // we would have got the same version, filename, and blockhashlist as server
 		
-					}else { // do not allocated scannedFileMetaData directly because it does not have version number
+				}else { // do not allocated scannedFileMetaData directly because it does not have version number
 					localFileInfoMap[scannedFileMetaData.Filename] = &FileMetaData{Filename: scannedFileMetaData.Filename, BlockHashList: scannedFileMetaData.BlockHashList, Version: latestVersion}
 				}
 			}
 		}
 	}
+
+	dirFilesAfterUpload := scanFiles(client.BaseDir)
+	scannedFileMetaDataAfterUpload := computeScannedFileMap(client.BaseDir, dirFilesAfterUpload, client.BlockSize)
+	
 	for file, localFileMetaData := range localFileInfoMap{
-		_, found := scannedFileMetaDataAfterDownload[file]
-		if !found{ // file has been deleted locally
+		_, found := scannedFileMetaDataAfterUpload[file]
+		if !found && !(len(localFileMetaData.BlockHashList)==1 && localFileMetaData.BlockHashList[0]=="0"){ // file has been deleted locally
 			log.Println("Adding deletion update of file to server")
 			var latestVersion int32
 			err = client.UpdateFile(&FileMetaData{Filename: localFileMetaData.Filename, BlockHashList: []string{"0"}, Version: localFileMetaData.Version + int32(1)}, &latestVersion)
@@ -368,20 +409,37 @@ func ClientSync(client RPCClient) {
 				}
 				defer f.Close()
 				remoteFileMetaData := remoteFileInfoMap[file]
-				for _, hash := range remoteFileMetaData.BlockHashList{
-					block := Block{}
-					err := client.GetBlock(hash, blockStoreAddr, &block)
-					if err!= nil{
-						log.Fatal(err)
-					}
-					_, err = f.Write(block.BlockData[:block.BlockSize])
+				if len(remoteFileMetaData.BlockHashList) == 1 && remoteFileMetaData.BlockHashList[0] == "0"{ // downloading a delete update
+					log.Println("entered deletion")
+					_, err = os.Stat(filename)
 					if err != nil {
-						log.Fatal(err)
+						if !os.IsNotExist(err){ // not already deleted from local and still got erro
+							log.Fatal(err)
+						}
 					}
-				}
-				fileMetaData := &FileMetaData{Filename: remoteFileMetaData.Filename, Version: remoteFileMetaData.Version, BlockHashList: remoteFileMetaData.BlockHashList}
-				localFileInfoMap[file] = fileMetaData // we would have got the same version, filename, and blockhashlist as server
-					
+					if !os.IsNotExist(err){ // not already deleted from local then delete it
+						err = os.Remove(filename)
+						if err != nil{
+							log.Fatal(err)
+						}	
+					}
+					fileMetaData := &FileMetaData{Filename: remoteFileMetaData.Filename, Version: remoteFileMetaData.Version, BlockHashList: remoteFileMetaData.BlockHashList}
+					localFileInfoMap[file] = fileMetaData // we would have got the same version, filename, and blockhashlist as server									
+				}else {
+					for _, hash := range remoteFileMetaData.BlockHashList{
+						block := Block{}
+						err := client.GetBlock(hash, blockStoreAddr, &block)
+						if err!= nil{
+							log.Fatal(err)
+						}
+						_, err = f.Write(block.BlockData[:block.BlockSize])
+						if err != nil {
+							log.Fatal(err)
+						}
+					}
+					fileMetaData := &FileMetaData{Filename: remoteFileMetaData.Filename, Version: remoteFileMetaData.Version, BlockHashList: remoteFileMetaData.BlockHashList}
+					localFileInfoMap[file] = fileMetaData // we would have got the same version, filename, and blockhashlist as server					
+				}					
 			}else{
 				fileMetaData := &FileMetaData{Filename: localFileMetaData.Filename, BlockHashList: []string{"0"}, Version: latestVersion}
 				localFileInfoMap[file] = fileMetaData
