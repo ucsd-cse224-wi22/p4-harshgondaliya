@@ -104,15 +104,11 @@ func ClientSync(client RPCClient) {
 	if err != nil{
 		log.Fatal(err)
 	}
-	log.Println("-----------------LocalFileInfoMap-----------------")
-	PrintMetaMap(localFileInfoMap)
 	// get remote fileInfoMap
 	remoteFileInfoMap := make(map[string]*FileMetaData)
 	if err := client.GetFileInfoMap(&remoteFileInfoMap); err != nil{
 		log.Fatal(err)
 	}
-	log.Println("-----------------RemoteFileInfoMap-----------------")
-	PrintMetaMap(remoteFileInfoMap)
 	
 	// Download new files and new updates
 	for file, remoteFileMetaData := range remoteFileInfoMap{
